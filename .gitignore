@@ -1,0 +1,21 @@
+# Notes (personal Obsidian vault)
+notes/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# C build artifacts
+*.o
+*.so
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+
+# Editor
+.vscode/
+.idea/
