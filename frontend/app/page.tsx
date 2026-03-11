@@ -23,6 +23,8 @@ const OPTIMISER_COLORS: Record<OptimiserName, string> = {
   adam: "#89b4fa",
   adahessian: "#cba6f7",
   c_adam: "#a6e3a1",
+  rmsprop: "#f9e2af",
+  lbfgs: "#94e2d5",
 };
 
 const OPTIMISER_LABELS: Record<OptimiserName, string> = {
@@ -30,6 +32,8 @@ const OPTIMISER_LABELS: Record<OptimiserName, string> = {
   adam: "Adam",
   adahessian: "AdaHessian",
   c_adam: "Adam (C)",
+  rmsprop: "RMSprop",
+  lbfgs: "L-BFGS",
 };
 
 interface TrajectoryState {
@@ -52,6 +56,7 @@ export default function Home() {
   const [animSpeed, setAnimSpeed] = useState(5);
 
   const [showGradients, setShowGradients] = useState(false);
+  const [viewMode, setViewMode] = useState<"3d" | "contour">("3d");
 
   const [surfaceData, setSurfaceData] = useState<SurfaceResponse | null>(null);
   const [gradientField, setGradientField] = useState<GradientFieldResponse | null>(null);
@@ -247,6 +252,8 @@ export default function Home() {
             setShowGradients={setShowGradients}
             surfaceDescription={surfaceInfoMap[surface]?.description ?? null}
             surfaceFormula={surfaceInfoMap[surface]?.formula ?? null}
+            viewMode={viewMode}
+            setViewMode={setViewMode}
           />
         </div>
 
@@ -258,6 +265,7 @@ export default function Home() {
               trajectories={trajectories}
               gradientField={gradientField}
               title={surfaceInfoMap[surface]?.name ?? surface}
+              viewMode={viewMode}
             />
           </div>
 

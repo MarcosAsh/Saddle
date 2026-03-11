@@ -25,9 +25,13 @@ from saddle.c_adam import c_adam_optimise
 from saddle.optimisers import (
     AdamState,
     AdaHessianState,
+    LBFGSState,
+    RMSpropState,
     SGDState,
     adam_update,
     adahessian_update,
+    lbfgs_update,
+    rmsprop_update,
     sgd_update,
 )
 from saddle.surfaces import SURFACE_IDS, SurfaceName, c_eval_grid
@@ -134,7 +138,7 @@ SURFACE_INFO: dict[str, dict] = {
 # Request / response models
 # ---------------------------------------------------------------------------
 
-OptimiserName = Literal["sgd", "adam", "adahessian", "c_adam"]
+OptimiserName = Literal["sgd", "adam", "adahessian", "c_adam", "rmsprop", "lbfgs"]
 
 
 class OptimiseRequest(BaseModel):
@@ -149,6 +153,8 @@ class OptimiseRequest(BaseModel):
     beta2: float = Field(default=0.999, ge=0, le=1)
     eps: float = Field(default=1e-8, gt=0)
     hessian_power: float = Field(default=1.0, ge=0, le=2, description="AdaHessian hessian_power")
+    alpha: float = Field(default=0.99, ge=0, le=1, description="RMSprop decay rate")
+    lbfgs_m: int = Field(default=5, ge=1, le=20, description="L-BFGS history size")
 
 
 class TrajectoryPoint(BaseModel):
@@ -305,6 +311,28 @@ def optimise(req: OptimiseRequest) -> OptimiseResponse:
                 state, params, grads, loss_fn, subkey,
                 lr=req.lr, beta1=req.beta1, beta2=req.beta2,
                 eps=adahessian_eps, hessian_power=req.hessian_power,
+            )
+            trajectory.append(TrajectoryPoint(
+                x=float(params[0]), y=float(params[1]), loss=float(loss_fn(params)),
+            ))
+
+    elif req.optimiser == "rmsprop":
+        state = RMSpropState.init(params)
+        for _ in range(req.num_steps):
+            grads = grad_fn(params)
+            state, params = rmsprop_update(
+                state, params, grads, lr=req.lr, alpha=req.alpha, eps=req.eps,
+            )
+            trajectory.append(TrajectoryPoint(
+                x=float(params[0]), y=float(params[1]), loss=float(loss_fn(params)),
+            ))
+
+    elif req.optimiser == "lbfgs":
+        state = LBFGSState.init(params, m=req.lbfgs_m)
+        for _ in range(req.num_steps):
+            grads = grad_fn(params)
+            state, params = lbfgs_update(
+                state, params, grads, loss_fn, lr=req.lr, m=req.lbfgs_m,
             )
             trajectory.append(TrajectoryPoint(
                 x=float(params[0]), y=float(params[1]), loss=float(loss_fn(params)),

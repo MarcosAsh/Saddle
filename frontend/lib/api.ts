@@ -1,7 +1,7 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export type SurfaceName = "rosenbrock" | "beale" | "himmelblau" | "bowl" | "monkey_saddle";
-export type OptimiserName = "sgd" | "adam" | "adahessian" | "c_adam";
+export type OptimiserName = "sgd" | "adam" | "adahessian" | "c_adam" | "rmsprop" | "lbfgs";
 
 export interface TrajectoryPoint {
   x: number;
@@ -21,6 +21,8 @@ export interface OptimiseRequest {
   beta2?: number;
   eps?: number;
   hessian_power?: number;
+  alpha?: number;
+  lbfgs_m?: number;
 }
 
 export interface OptimiseResponse {

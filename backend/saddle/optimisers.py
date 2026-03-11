@@ -11,6 +11,8 @@ Optimisers implemented:
   - SGD with momentum (Polyak's heavy ball)
   - Adam (Kingma & Ba, 2014)
   - AdaHessian (Yao et al., 2021) -- uses Hessian diagonal via Hutchinson estimator
+  - RMSprop (Hinton, 2012)
+  - L-BFGS (Nocedal, 1980) -- quasi-Newton with backtracking Armijo line search
 """
 
 from __future__ import annotations
@@ -231,4 +233,224 @@ def adahessian_update(
     new_params = params - lr * m_hat / (jnp.power(v_hat, hessian_power / 2.0) + eps)
 
     new_state = AdaHessianState(m=new_m, v=new_v, step=new_step)
+    return new_state, new_params
+
+
+# ---------------------------------------------------------------------------
+# RMSprop
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class RMSpropState:
+    """Running average of squared gradients."""
+    v: Array
+    step: int
+
+    @staticmethod
+    def init(params: Array) -> RMSpropState:
+        return RMSpropState(
+            v=jnp.zeros_like(params),
+            step=0,
+        )
+
+
+def rmsprop_update(
+    state: RMSpropState,
+    params: Array,
+    grads: Array,
+    lr: float = 0.01,
+    alpha: float = 0.99,
+    eps: float = 1e-8,
+) -> tuple[RMSpropState, Array]:
+    """
+    RMSprop (Hinton, 2012).
+
+    v_t = alpha * v_{t-1} + (1 - alpha) * g_t^2
+    theta_t = theta_{t-1} - lr * g_t / (sqrt(v_t) + eps)
+
+    No bias correction -- unlike Adam, the original RMSprop has none.
+    """
+    new_v = alpha * state.v + (1.0 - alpha) * grads * grads
+    new_params = params - lr * grads / (jnp.sqrt(new_v) + eps)
+    new_state = RMSpropState(v=new_v, step=state.step + 1)
+    return new_state, new_params
+
+
+# ---------------------------------------------------------------------------
+# L-BFGS
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class LBFGSState:
+    """
+    State for L-BFGS with a fixed-size circular buffer of (s, y) pairs.
+    """
+    prev_params: Array
+    prev_grads: Array
+    s_history: Array   # (m, d) -- position differences
+    y_history: Array   # (m, d) -- gradient differences
+    rho_history: Array # (m,) -- 1 / (y_k^T s_k)
+    history_len: int
+    step: int
+
+    @staticmethod
+    def init(params: Array, m: int = 5) -> LBFGSState:
+        d = params.shape[0]
+        return LBFGSState(
+            prev_params=params,
+            prev_grads=jnp.zeros_like(params),
+            s_history=jnp.zeros((m, d)),
+            y_history=jnp.zeros((m, d)),
+            rho_history=jnp.zeros(m),
+            history_len=0,
+            step=0,
+        )
+
+
+def _lbfgs_two_loop(
+    grads: Array,
+    s_history: Array,
+    y_history: Array,
+    rho_history: Array,
+    history_len: int,
+) -> Array:
+    """
+    L-BFGS two-loop recursion to compute the search direction.
+
+    Returns -H_k * grads, where H_k is the approximate inverse Hessian
+    built from the stored (s, y) pairs.
+    """
+    m = s_history.shape[0]
+    k = min(history_len, m)
+    q = grads.copy()
+    alphas = jnp.zeros(m)
+
+    # Backward pass
+    for i in range(k - 1, -1, -1):
+        a_i = rho_history[i] * jnp.dot(s_history[i], q)
+        alphas = alphas.at[i].set(a_i)
+        q = q - a_i * y_history[i]
+
+    # Initial Hessian approximation: H_0 = gamma * I
+    if k > 0:
+        latest = k - 1
+        gamma = jnp.dot(s_history[latest], y_history[latest]) / (
+            jnp.dot(y_history[latest], y_history[latest]) + 1e-10
+        )
+        gamma = jnp.clip(gamma, 1e-6, 1e6)
+    else:
+        gamma = 1.0
+
+    r = gamma * q
+
+    # Forward pass
+    for i in range(k):
+        beta = rho_history[i] * jnp.dot(y_history[i], r)
+        r = r + (alphas[i] - beta) * s_history[i]
+
+    return -r
+
+
+def _backtracking_line_search(
+    loss_fn: Callable[[Array], Array],
+    params: Array,
+    grads: Array,
+    direction: Array,
+    lr: float,
+    c1: float = 1e-4,
+    rho: float = 0.5,
+    max_iter: int = 20,
+) -> float:
+    """Backtracking Armijo line search. Returns the step size."""
+    f0 = float(loss_fn(params))
+    slope = float(jnp.dot(grads, direction))
+
+    # If direction is not a descent direction, return a small fixed step
+    if slope >= 0:
+        return lr * 0.01
+
+    step_size = lr
+    for _ in range(max_iter):
+        candidate = params + step_size * direction
+        f_new = float(loss_fn(candidate))
+        if f_new <= f0 + c1 * step_size * slope:
+            return step_size
+        step_size *= rho
+
+    return step_size
+
+
+def lbfgs_update(
+    state: LBFGSState,
+    params: Array,
+    grads: Array,
+    loss_fn: Callable[[Array], Array],
+    lr: float = 1.0,
+    m: int = 5,
+) -> tuple[LBFGSState, Array]:
+    """
+    L-BFGS (Nocedal, 1980).
+
+    A quasi-Newton method that approximates the inverse Hessian using
+    a limited history of position and gradient differences. Uses a
+    backtracking Armijo line search for step size selection.
+
+    On the first step, falls back to a gradient descent step since
+    there is no history to build the approximation from.
+    """
+    if state.step == 0:
+        # First step: plain gradient descent, no history yet
+        direction = -grads
+        step_size = _backtracking_line_search(
+            loss_fn, params, grads, direction, lr,
+        )
+        new_params = params + step_size * direction
+        new_state = LBFGSState(
+            prev_params=params,
+            prev_grads=grads,
+            s_history=state.s_history,
+            y_history=state.y_history,
+            rho_history=state.rho_history,
+            history_len=0,
+            step=1,
+        )
+        return new_state, new_params
+
+    # Compute position and gradient differences
+    s_k = params - state.prev_params
+    y_k = grads - state.prev_grads
+    sy = jnp.dot(s_k, y_k)
+
+    # Update circular buffer (only if curvature condition holds)
+    buf_size = state.s_history.shape[0]
+    if float(sy) > 1e-10:
+        idx = state.history_len % buf_size
+        new_s = state.s_history.at[idx].set(s_k)
+        new_y = state.y_history.at[idx].set(y_k)
+        new_rho = state.rho_history.at[idx].set(1.0 / sy)
+        new_len = min(state.history_len + 1, buf_size)
+    else:
+        new_s = state.s_history
+        new_y = state.y_history
+        new_rho = state.rho_history
+        new_len = state.history_len
+
+    # Compute search direction via two-loop recursion
+    direction = _lbfgs_two_loop(grads, new_s, new_y, new_rho, new_len)
+
+    # Line search
+    step_size = _backtracking_line_search(
+        loss_fn, params, grads, direction, lr,
+    )
+    new_params = params + step_size * direction
+
+    new_state = LBFGSState(
+        prev_params=params,
+        prev_grads=grads,
+        s_history=new_s,
+        y_history=new_y,
+        rho_history=new_rho,
+        history_len=new_len,
+        step=state.step + 1,
+    )
     return new_state, new_params

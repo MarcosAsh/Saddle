@@ -15,6 +15,8 @@ const OPTIMISERS: { value: OptimiserName; label: string }[] = [
   { value: "adam", label: "Adam" },
   { value: "adahessian", label: "AdaHessian" },
   { value: "c_adam", label: "Adam (C)" },
+  { value: "rmsprop", label: "RMSprop" },
+  { value: "lbfgs", label: "L-BFGS" },
 ];
 
 interface ControlsProps {
@@ -44,6 +46,8 @@ interface ControlsProps {
   setShowGradients: (v: boolean) => void;
   surfaceDescription: string | null;
   surfaceFormula: string | null;
+  viewMode: "3d" | "contour";
+  setViewMode: (v: "3d" | "contour") => void;
 }
 
 function Slider({
@@ -128,6 +132,16 @@ export default function Controls(props: ControlsProps) {
           <p>{props.surfaceDescription}</p>
         </div>
       )}
+
+      <label className="flex items-center gap-2 text-xs text-ctp-subtext0 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={props.viewMode === "contour"}
+          onChange={(e) => props.setViewMode(e.target.checked ? "contour" : "3d")}
+          className="accent-ctp-mauve"
+        />
+        2D contour view
+      </label>
 
       <label className="flex items-center gap-2 text-xs text-ctp-subtext0 cursor-pointer">
         <input
