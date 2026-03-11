@@ -145,7 +145,7 @@ export default function SurfacePlot({
       if (visible.length === 0) continue;
 
       const trajZ = visible.map((p) =>
-        Math.log10(Math.max(p.loss ?? 1e-10, 1e-10)) + 0.1
+        Math.max(Math.log10(Math.max(p.loss ?? 1e-10, 1e-10)), zMin) + 0.1
       );
 
       d.push({
