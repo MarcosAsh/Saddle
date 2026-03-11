@@ -208,10 +208,10 @@ export default function Home() {
   ]);
 
   return (
-    <main className="min-h-screen p-6 md:p-10 max-w-7xl mx-auto">
-      <div className="mb-8 flex items-center gap-4">
-        <img src="/logo.svg" alt="Saddle" className="h-[4.2rem]" />
-        <p className="text-sm text-ctp-subtext0">
+    <main className="min-h-screen p-4 md:p-6 lg:p-10 max-w-7xl mx-auto">
+      <div className="mb-4 lg:mb-8 flex items-center gap-3 lg:gap-4">
+        <img src="/logo.svg" alt="Saddle" className="h-10 lg:h-[4.2rem]" />
+        <p className="text-xs lg:text-sm text-ctp-subtext0">
           Interactive optimiser visualisation
         </p>
       </div>
@@ -259,7 +259,7 @@ export default function Home() {
 
         {/* Plots */}
         <div className="flex-1 flex flex-col gap-4">
-          <div className="border border-ctp-surface1 rounded-lg h-[500px] lg:h-[600px]">
+          <div className="border border-ctp-surface1 rounded-lg h-[350px] md:h-[500px] lg:h-[600px]">
             <SurfacePlot
               surface={surfaceData}
               trajectories={trajectories}
@@ -270,7 +270,7 @@ export default function Home() {
           </div>
 
           {trajectories.length > 0 && (
-            <div className="border border-ctp-surface1 rounded-lg h-[250px]">
+            <div className="border border-ctp-surface1 rounded-lg h-[200px] md:h-[250px]">
               <ConvergencePlot trajectories={trajectories} />
             </div>
           )}

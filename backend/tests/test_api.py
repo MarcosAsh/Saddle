@@ -30,7 +30,7 @@ class TestSurfaceEndpoint:
         assert data["cols"] == 50
 
     def test_all_surfaces(self) -> None:
-        for name in ("rosenbrock", "beale", "himmelblau", "bowl"):
+        for name in ("rosenbrock", "beale", "himmelblau", "bowl", "monkey_saddle"):
             resp = client.get(f"/surface?name={name}&resolution=10")
             assert resp.status_code == 200, f"Failed for {name}"
 
@@ -94,6 +94,30 @@ class TestOptimiseEndpoint:
         assert data["optimiser"] == "c_adam"
         assert data["trajectory"][-1]["loss"] < 0.01
 
+    def test_rmsprop_bowl(self) -> None:
+        resp = client.post("/optimise", json={
+            "surface": "bowl",
+            "optimiser": "rmsprop",
+            "x0": 3.0, "y0": 4.0,
+            "num_steps": 100,
+            "lr": 0.01,
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["trajectory"][-1]["loss"] < data["trajectory"][0]["loss"]
+
+    def test_lbfgs_rosenbrock(self) -> None:
+        resp = client.post("/optimise", json={
+            "surface": "rosenbrock",
+            "optimiser": "lbfgs",
+            "x0": -1.0, "y0": 1.0,
+            "num_steps": 200,
+            "lr": 1.0,
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["trajectory"][-1]["loss"] < data["trajectory"][0]["loss"]
+
     def test_trajectory_has_correct_fields(self) -> None:
         resp = client.post("/optimise", json={
             "surface": "bowl",
@@ -105,6 +129,38 @@ class TestOptimiseEndpoint:
         assert "x" in point
         assert "y" in point
         assert "loss" in point
+
+
+class TestSurfacesListEndpoint:
+    def test_returns_list(self) -> None:
+        resp = client.get("/surfaces")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data, list)
+        assert len(data) == 5
+
+    def test_each_surface_has_fields(self) -> None:
+        resp = client.get("/surfaces")
+        data = resp.json()
+        for surface in data:
+            assert "name" in surface
+            assert "key" in surface
+            assert "formula" in surface
+            assert "description" in surface
+            assert "minima" in surface
+
+
+class TestGradientEndpoint:
+    def test_gradient_field_shape(self) -> None:
+        resp = client.get("/gradient?name=bowl&resolution=5")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["x"]) == 5
+        assert len(data["y"]) == 5
+        assert len(data["gx"]) == 5
+        assert len(data["gx"][0]) == 5
+        assert len(data["gy"]) == 5
+        assert len(data["gy"][0]) == 5
 
 
 class TestBenchmarkEndpoint:

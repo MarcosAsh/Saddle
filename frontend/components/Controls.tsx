@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { SurfaceName, OptimiserName } from "@/lib/api";
 
 const SURFACES: { value: SurfaceName; label: string }[] = [
@@ -90,90 +91,63 @@ function Slider({
 }
 
 export default function Controls(props: ControlsProps) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+
   return (
     <div className="flex flex-col gap-4 p-4 border border-ctp-surface1 rounded-lg overflow-y-auto bg-ctp-mantle">
-      <h2 className="text-xs font-semibold text-ctp-overlay1 uppercase tracking-wider">
+      {/* Mobile: compact header with toggle + run button */}
+      <div className="flex items-center justify-between lg:hidden">
+        <button
+          onClick={() => setMobileOpen(!mobileOpen)}
+          className="flex items-center gap-2 text-xs font-semibold text-ctp-overlay1 uppercase tracking-wider"
+        >
+          <svg
+            className={`w-3 h-3 transition-transform ${mobileOpen ? "rotate-90" : ""}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+          Controls
+        </button>
+        <button
+          onClick={props.onRun}
+          disabled={props.running}
+          className="bg-ctp-mauve hover:bg-ctp-lavender disabled:bg-ctp-surface1 disabled:text-ctp-overlay0 text-ctp-crust text-xs font-medium py-1.5 px-3 rounded transition-colors"
+        >
+          {props.running ? "Running..." : "Run"}
+        </button>
+      </div>
+
+      {/* Desktop: always-visible header */}
+      <h2 className="hidden lg:block text-xs font-semibold text-ctp-overlay1 uppercase tracking-wider">
         Controls
       </h2>
 
-      <div className="flex flex-col gap-1">
-        <label className="text-xs text-ctp-subtext0">Surface</label>
-        <select
-          value={props.surface}
-          onChange={(e) => props.setSurface(e.target.value as SurfaceName)}
-          className="bg-ctp-surface0 text-ctp-text text-sm rounded px-2 py-1.5 border border-ctp-surface1 focus:border-ctp-mauve outline-none"
-        >
-          {SURFACES.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-xs text-ctp-subtext0">Optimiser</label>
-        <select
-          value={props.optimiser1}
-          onChange={(e) => props.setOptimiser1(e.target.value as OptimiserName)}
-          className="bg-ctp-surface0 text-ctp-text text-sm rounded px-2 py-1.5 border border-ctp-surface1 focus:border-ctp-mauve outline-none"
-        >
-          {OPTIMISERS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Surface description */}
-      {props.surfaceDescription && (
-        <div className="text-xs text-ctp-overlay1 leading-relaxed">
-          {props.surfaceFormula && (
-            <p className="font-mono text-ctp-subtext0 mb-1">{props.surfaceFormula}</p>
-          )}
-          <p>{props.surfaceDescription}</p>
-        </div>
-      )}
-
-      <label className="flex items-center gap-2 text-xs text-ctp-subtext0 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={props.viewMode === "contour"}
-          onChange={(e) => props.setViewMode(e.target.checked ? "contour" : "3d")}
-          className="accent-ctp-mauve"
-        />
-        2D contour view
-      </label>
-
-      <label className="flex items-center gap-2 text-xs text-ctp-subtext0 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={props.showGradients}
-          onChange={(e) => props.setShowGradients(e.target.checked)}
-          className="accent-ctp-mauve"
-        />
-        Show gradient field
-      </label>
-
-      <label className="flex items-center gap-2 text-xs text-ctp-subtext0 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={props.sideBySide}
-          onChange={(e) => props.setSideBySide(e.target.checked)}
-          className="accent-ctp-mauve"
-        />
-        Compare two optimisers
-      </label>
-
-      {props.sideBySide && (
+      {/* Controls body: hidden on mobile when collapsed, always visible on desktop */}
+      <div className={`flex flex-col gap-4 ${mobileOpen ? "" : "hidden"} lg:flex`}>
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-ctp-subtext0">Optimiser 2</label>
+          <label className="text-xs text-ctp-subtext0">Surface</label>
           <select
-            value={props.optimiser2 ?? "adam"}
-            onChange={(e) =>
-              props.setOptimiser2(e.target.value as OptimiserName)
-            }
+            value={props.surface}
+            onChange={(e) => props.setSurface(e.target.value as SurfaceName)}
+            className="bg-ctp-surface0 text-ctp-text text-sm rounded px-2 py-1.5 border border-ctp-surface1 focus:border-ctp-mauve outline-none"
+          >
+            {SURFACES.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-ctp-subtext0">Optimiser</label>
+          <select
+            value={props.optimiser1}
+            onChange={(e) => props.setOptimiser1(e.target.value as OptimiserName)}
             className="bg-ctp-surface0 text-ctp-text text-sm rounded px-2 py-1.5 border border-ctp-surface1 focus:border-ctp-mauve outline-none"
           >
             {OPTIMISERS.map((o) => (
@@ -183,86 +157,146 @@ export default function Controls(props: ControlsProps) {
             ))}
           </select>
         </div>
-      )}
 
-      <hr className="border-ctp-surface1" />
+        {/* Surface description */}
+        {props.surfaceDescription && (
+          <div className="text-xs text-ctp-overlay1 leading-relaxed">
+            {props.surfaceFormula && (
+              <p className="font-mono text-ctp-subtext0 mb-1">{props.surfaceFormula}</p>
+            )}
+            <p>{props.surfaceDescription}</p>
+          </div>
+        )}
 
-      <Slider
-        label="Learning rate"
-        value={Math.log10(props.lr)}
-        min={-5}
-        max={0}
-        step={0.1}
-        onChange={(v) => props.setLr(Math.pow(10, v))}
-        display={props.lr.toExponential(1)}
-        hint="Step size per update. Too high overshoots, too low crawls."
-      />
+        <label className="flex items-center gap-2 text-xs text-ctp-subtext0 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={props.viewMode === "contour"}
+            onChange={(e) => props.setViewMode(e.target.checked ? "contour" : "3d")}
+            className="accent-ctp-mauve"
+          />
+          2D contour view
+        </label>
 
-      <Slider
-        label="Momentum"
-        value={props.momentum}
-        min={0}
-        max={0.99}
-        step={0.01}
-        onChange={props.setMomentum}
-        display={props.momentum.toFixed(2)}
-        hint="SGD velocity decay. Higher values carry more speed through valleys."
-      />
+        <label className="flex items-center gap-2 text-xs text-ctp-subtext0 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={props.showGradients}
+            onChange={(e) => props.setShowGradients(e.target.checked)}
+            className="accent-ctp-mauve"
+          />
+          Show gradient field
+        </label>
 
-      <Slider
-        label="Steps"
-        value={props.numSteps}
-        min={50}
-        max={5000}
-        step={50}
-        onChange={props.setNumSteps}
-        hint="Total optimisation iterations to run."
-      />
+        <label className="flex items-center gap-2 text-xs text-ctp-subtext0 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={props.sideBySide}
+            onChange={(e) => props.setSideBySide(e.target.checked)}
+            className="accent-ctp-mauve"
+          />
+          Compare two optimisers
+        </label>
 
-      <hr className="border-ctp-surface1" />
+        {props.sideBySide && (
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-ctp-subtext0">Optimiser 2</label>
+            <select
+              value={props.optimiser2 ?? "adam"}
+              onChange={(e) =>
+                props.setOptimiser2(e.target.value as OptimiserName)
+              }
+              className="bg-ctp-surface0 text-ctp-text text-sm rounded px-2 py-1.5 border border-ctp-surface1 focus:border-ctp-mauve outline-none"
+            >
+              {OPTIMISERS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
-      <Slider
-        label="x&#x2080;"
-        value={props.x0}
-        min={-5}
-        max={5}
-        step={0.1}
-        onChange={props.setX0}
-        display={props.x0.toFixed(1)}
-        hint="Starting x coordinate on the surface."
-      />
+        <hr className="border-ctp-surface1" />
 
-      <Slider
-        label="y&#x2080;"
-        value={props.y0}
-        min={-5}
-        max={5}
-        step={0.1}
-        onChange={props.setY0}
-        display={props.y0.toFixed(1)}
-        hint="Starting y coordinate on the surface."
-      />
+        <Slider
+          label="Learning rate"
+          value={Math.log10(props.lr)}
+          min={-5}
+          max={0}
+          step={0.1}
+          onChange={(v) => props.setLr(Math.pow(10, v))}
+          display={props.lr.toExponential(1)}
+          hint="Step size per update. Too high overshoots, too low crawls."
+        />
 
-      <hr className="border-ctp-surface1" />
+        <Slider
+          label="Momentum"
+          value={props.momentum}
+          min={0}
+          max={0.99}
+          step={0.01}
+          onChange={props.setMomentum}
+          display={props.momentum.toFixed(2)}
+          hint="SGD velocity decay. Higher values carry more speed through valleys."
+        />
 
-      <Slider
-        label="Animation speed"
-        value={props.animSpeed}
-        min={1}
-        max={50}
-        step={1}
-        onChange={props.setAnimSpeed}
-        display={`${props.animSpeed} steps/frame`}
-        hint="How many steps to advance per animation frame."
-      />
+        <Slider
+          label="Steps"
+          value={props.numSteps}
+          min={50}
+          max={5000}
+          step={50}
+          onChange={props.setNumSteps}
+          hint="Total optimisation iterations to run."
+        />
 
-      <button
-        onClick={props.onRun}
-        disabled={props.running}
-        className="mt-2 bg-ctp-mauve hover:bg-ctp-lavender disabled:bg-ctp-surface1 disabled:text-ctp-overlay0 text-ctp-crust text-sm font-medium py-2 px-4 rounded transition-colors"
-      >
-        {props.running ? "Running..." : "Run"}
-      </button>
+        <hr className="border-ctp-surface1" />
+
+        <Slider
+          label="x&#x2080;"
+          value={props.x0}
+          min={-5}
+          max={5}
+          step={0.1}
+          onChange={props.setX0}
+          display={props.x0.toFixed(1)}
+          hint="Starting x coordinate on the surface."
+        />
+
+        <Slider
+          label="y&#x2080;"
+          value={props.y0}
+          min={-5}
+          max={5}
+          step={0.1}
+          onChange={props.setY0}
+          display={props.y0.toFixed(1)}
+          hint="Starting y coordinate on the surface."
+        />
+
+        <hr className="border-ctp-surface1" />
+
+        <Slider
+          label="Animation speed"
+          value={props.animSpeed}
+          min={1}
+          max={50}
+          step={1}
+          onChange={props.setAnimSpeed}
+          display={`${props.animSpeed} steps/frame`}
+          hint="How many steps to advance per animation frame."
+        />
+
+        {/* Run button inside expanded controls on mobile */}
+        <button
+          onClick={props.onRun}
+          disabled={props.running}
+          className="mt-2 bg-ctp-mauve hover:bg-ctp-lavender disabled:bg-ctp-surface1 disabled:text-ctp-overlay0 text-ctp-crust text-sm font-medium py-2 px-4 rounded transition-colors lg:block"
+        >
+          {props.running ? "Running..." : "Run"}
+        </button>
+      </div>
     </div>
   );
 }

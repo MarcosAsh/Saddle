@@ -22,6 +22,10 @@ from saddle.optimisers import (
     adam_update,
     AdaHessianState,
     adahessian_update,
+    RMSpropState,
+    rmsprop_update,
+    LBFGSState,
+    lbfgs_update,
     _hutchinson_hessian_diag,
 )
 
@@ -235,3 +239,103 @@ class TestHutchinsonHessianDiag:
         h1 = _hutchinson_hessian_diag(scaled_quadratic_loss, jnp.array([0.0, 0.0]), key)
         h2 = _hutchinson_hessian_diag(scaled_quadratic_loss, jnp.array([10.0, -5.0]), key)
         assert jnp.allclose(h1, h2, atol=1e-5)
+
+
+# -------------------------------------------------------------------
+# RMSprop tests
+# -------------------------------------------------------------------
+
+class TestRMSpropInit:
+    def test_v_is_zeros(self) -> None:
+        p = jnp.array([3.0, -2.0])
+        state = RMSpropState.init(p)
+        assert jnp.allclose(state.v, jnp.zeros(2))
+        assert state.step == 0
+
+    def test_shape_matches_params(self) -> None:
+        p = jnp.ones(5)
+        state = RMSpropState.init(p)
+        assert state.v.shape == (5,)
+
+
+class TestRMSpropSingleStep:
+    def test_moves_toward_minimum(self) -> None:
+        """On a bowl starting at (3, 4), one step should reduce distance to origin."""
+        p = jnp.array([3.0, 4.0])
+        g = jax.grad(bowl_loss)(p)
+        state = RMSpropState.init(p)
+        new_state, new_p = rmsprop_update(state, p, g, lr=0.01)
+        assert jnp.sum(new_p ** 2) < jnp.sum(p ** 2)
+        assert new_state.step == 1
+
+
+class TestRMSpropConvergence:
+    def test_converges_on_bowl(self) -> None:
+        """RMSprop should reach near-zero on the bowl within 1000 steps."""
+        p = jnp.array([3.0, 4.0])
+        state = RMSpropState.init(p)
+        for _ in range(1000):
+            g = jax.grad(bowl_loss)(p)
+            state, p = rmsprop_update(state, p, g, lr=0.01)
+        assert bowl_loss(p) < 1e-4
+
+    def test_makes_progress_on_rosenbrock(self) -> None:
+        """RMSprop should reduce Rosenbrock loss substantially from (-1, 1)."""
+        p = jnp.array([-1.0, 1.0])
+        initial_loss = rosenbrock_loss(p)
+        state = RMSpropState.init(p)
+        for _ in range(2000):
+            g = jax.grad(rosenbrock_loss)(p)
+            state, p = rmsprop_update(state, p, g, lr=0.001)
+        assert rosenbrock_loss(p) < initial_loss * 0.1
+
+
+# -------------------------------------------------------------------
+# L-BFGS tests
+# -------------------------------------------------------------------
+
+class TestLBFGSInit:
+    def test_prev_params_shape(self) -> None:
+        p = jnp.array([3.0, -2.0])
+        state = LBFGSState.init(p)
+        assert state.prev_params.shape == (2,)
+        assert state.step == 0
+
+    def test_history_shapes(self) -> None:
+        p = jnp.ones(5)
+        state = LBFGSState.init(p, m=10)
+        assert state.s_history.shape == (10, 5)
+        assert state.y_history.shape == (10, 5)
+        assert state.rho_history.shape == (10,)
+        assert state.history_len == 0
+
+
+class TestLBFGSSingleStep:
+    def test_moves_toward_minimum(self) -> None:
+        """On a bowl starting at (3, 4), one step should reduce distance to origin."""
+        p = jnp.array([3.0, 4.0])
+        g = jax.grad(bowl_loss)(p)
+        state = LBFGSState.init(p)
+        new_state, new_p = lbfgs_update(state, p, g, bowl_loss, lr=1.0)
+        assert jnp.sum(new_p ** 2) < jnp.sum(p ** 2)
+        assert new_state.step == 1
+
+
+class TestLBFGSConvergence:
+    def test_converges_on_bowl(self) -> None:
+        """L-BFGS should converge quickly on the bowl."""
+        p = jnp.array([3.0, 4.0])
+        state = LBFGSState.init(p)
+        for _ in range(100):
+            g = jax.grad(bowl_loss)(p)
+            state, p = lbfgs_update(state, p, g, bowl_loss, lr=1.0)
+        assert bowl_loss(p) < 1e-6
+
+    def test_converges_on_rosenbrock(self) -> None:
+        """L-BFGS should converge on Rosenbrock."""
+        p = jnp.array([-1.0, 1.0])
+        state = LBFGSState.init(p)
+        for _ in range(200):
+            g = jax.grad(rosenbrock_loss)(p)
+            state, p = lbfgs_update(state, p, g, rosenbrock_loss, lr=1.0)
+        assert rosenbrock_loss(p) < 0.01
