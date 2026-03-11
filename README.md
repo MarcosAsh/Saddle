@@ -1,4 +1,6 @@
-# Saddle
+<p align="center">
+  <img src="frontend/public/logo.svg" alt="Saddle" width="280" />
+</p>
 
 Interactive optimiser visualisation. Compare how SGD, Adam, L-BFGS, and more
 navigate loss surfaces in real time -- with a C backend for fast numerical

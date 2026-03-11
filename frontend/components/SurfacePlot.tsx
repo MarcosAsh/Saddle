@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
 import PlotlyChart from "./PlotlyChart";
 import type { SurfaceResponse, TrajectoryPoint, GradientFieldResponse } from "@/lib/api";
 
@@ -15,6 +15,9 @@ interface SurfacePlotProps {
   gradientField: GradientFieldResponse | null;
   title?: string;
   viewMode: "3d" | "contour";
+  onPointClick?: (x: number, y: number) => void;
+  startX?: number;
+  startY?: number;
 }
 
 export default function SurfacePlot({
@@ -23,6 +26,9 @@ export default function SurfacePlot({
   gradientField,
   title,
   viewMode,
+  onPointClick,
+  startX,
+  startY,
 }: SurfacePlotProps) {
   const { xs, ys, zLog, zMin, zMax } = useMemo(() => {
     if (!surface) return { xs: [], ys: [], zLog: [], zMin: -10, zMax: 5 };
@@ -251,6 +257,24 @@ export default function SurfacePlot({
       }
     }
 
+    // Starting point crosshair (shown when no trajectories running)
+    if (startX != null && startY != null && trajectories.length === 0) {
+      d.push({
+        type: "scatter",
+        mode: "markers",
+        x: [startX],
+        y: [startY],
+        marker: {
+          size: 10,
+          color: "transparent",
+          line: { color: "#cdd6f4", width: 2 },
+          symbol: "cross-thin",
+        },
+        name: `Start (${startX}, ${startY})`,
+        hoverinfo: "name",
+      } as Plotly.Data);
+    }
+
     for (const traj of trajectories) {
       const visible = traj.points.slice(0, traj.animIndex + 1);
       if (visible.length === 0) continue;
@@ -294,7 +318,7 @@ export default function SurfacePlot({
     }
 
     return d;
-  }, [surface, xs, ys, zLog, trajectories, gradientField]);
+  }, [surface, xs, ys, zLog, trajectories, gradientField, startX, startY]);
 
   const titleConfig = title
     ? {
@@ -396,12 +420,27 @@ export default function SurfacePlot({
 
   const is3d = viewMode === "3d";
 
+  const handleClick = useCallback(
+    (event: Plotly.PlotMouseEvent) => {
+      if (!onPointClick || is3d) return;
+      const point = event.points[0];
+      if (point && typeof point.x === "number" && typeof point.y === "number") {
+        onPointClick(
+          Math.round(point.x * 10) / 10,
+          Math.round(point.y * 10) / 10,
+        );
+      }
+    },
+    [onPointClick, is3d],
+  );
+
   return (
     <PlotlyChart
       data={is3d ? data3d : data2d}
       layout={is3d ? layout3d : layout2d}
       config={{ responsive: true, displayModeBar: false }}
       style={{ width: "100%", height: "100%" }}
+      onClick={handleClick}
     />
   );
 }

@@ -18,6 +18,29 @@ import {
   type GradientFieldResponse,
 } from "@/lib/api";
 
+// --- URL hash helpers ---
+
+const VALID_SURFACES = new Set<string>(["rosenbrock", "beale", "himmelblau", "bowl", "monkey_saddle"]);
+const VALID_OPTIMISERS = new Set<string>(["sgd", "adam", "adahessian", "c_adam", "rmsprop", "lbfgs"]);
+
+function parseHash(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  const hash = window.location.hash.slice(1);
+  const params: Record<string, string> = {};
+  for (const part of hash.split("&")) {
+    const [k, v] = part.split("=");
+    if (k && v) params[decodeURIComponent(k)] = decodeURIComponent(v);
+  }
+  return params;
+}
+
+function writeHash(state: Record<string, string | number | boolean>) {
+  const parts = Object.entries(state)
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+    .join("&");
+  window.history.replaceState(null, "", `#${parts}`);
+}
+
 const OPTIMISER_COLORS: Record<OptimiserName, string> = {
   sgd: "#f38ba8",
   adam: "#89b4fa",
@@ -44,19 +67,38 @@ interface TrajectoryState {
 }
 
 export default function Home() {
-  const [surface, setSurface] = useState<SurfaceName>("rosenbrock");
-  const [optimiser1, setOptimiser1] = useState<OptimiserName>("adam");
-  const [optimiser2, setOptimiser2] = useState<OptimiserName | null>("sgd");
-  const [lr, setLr] = useState(0.01);
-  const [momentum, setMomentum] = useState(0.9);
-  const [numSteps, setNumSteps] = useState(500);
-  const [x0, setX0] = useState(-1.0);
-  const [y0, setY0] = useState(1.0);
-  const [sideBySide, setSideBySide] = useState(true);
-  const [animSpeed, setAnimSpeed] = useState(5);
+  // Read initial state from URL hash (if present)
+  const [initFromHash] = useState(() => {
+    const h = parseHash();
+    return {
+      surface: VALID_SURFACES.has(h.s ?? "") ? (h.s as SurfaceName) : "rosenbrock",
+      opt1: VALID_OPTIMISERS.has(h.o1 ?? "") ? (h.o1 as OptimiserName) : "adam",
+      opt2: h.o2 === "none" ? null : VALID_OPTIMISERS.has(h.o2 ?? "") ? (h.o2 as OptimiserName) : "sgd",
+      lr: h.lr ? Number(h.lr) : 0.01,
+      mom: h.mom ? Number(h.mom) : 0.9,
+      steps: h.n ? Number(h.n) : 500,
+      x0: h.x0 ? Number(h.x0) : -1.0,
+      y0: h.y0 ? Number(h.y0) : 1.0,
+      side: h.cmp !== "0",
+      view: h.v === "2d" ? "contour" as const : "3d" as const,
+      grad: h.gf === "1",
+      speed: h.sp ? Number(h.sp) : 5,
+    };
+  });
 
-  const [showGradients, setShowGradients] = useState(false);
-  const [viewMode, setViewMode] = useState<"3d" | "contour">("3d");
+  const [surface, setSurface] = useState<SurfaceName>(initFromHash.surface);
+  const [optimiser1, setOptimiser1] = useState<OptimiserName>(initFromHash.opt1);
+  const [optimiser2, setOptimiser2] = useState<OptimiserName | null>(initFromHash.opt2);
+  const [lr, setLr] = useState(initFromHash.lr);
+  const [momentum, setMomentum] = useState(initFromHash.mom);
+  const [numSteps, setNumSteps] = useState(initFromHash.steps);
+  const [x0, setX0] = useState(initFromHash.x0);
+  const [y0, setY0] = useState(initFromHash.y0);
+  const [sideBySide, setSideBySide] = useState(initFromHash.side);
+  const [animSpeed, setAnimSpeed] = useState(initFromHash.speed);
+
+  const [showGradients, setShowGradients] = useState(initFromHash.grad);
+  const [viewMode, setViewMode] = useState<"3d" | "contour">(initFromHash.view);
 
   const [surfaceData, setSurfaceData] = useState<SurfaceResponse | null>(null);
   const [gradientField, setGradientField] = useState<GradientFieldResponse | null>(null);
@@ -150,6 +192,30 @@ export default function Home() {
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
+  }, []);
+
+  // Sync state to URL hash
+  useEffect(() => {
+    writeHash({
+      s: surface,
+      o1: optimiser1,
+      o2: sideBySide && optimiser2 ? optimiser2 : "none",
+      lr: lr,
+      mom: momentum,
+      n: numSteps,
+      x0: x0,
+      y0: y0,
+      cmp: sideBySide ? "1" : "0",
+      v: viewMode === "contour" ? "2d" : "3d",
+      gf: showGradients ? "1" : "0",
+      sp: animSpeed,
+    });
+  }, [surface, optimiser1, optimiser2, lr, momentum, numSteps, x0, y0, sideBySide, viewMode, showGradients, animSpeed]);
+
+  // Click on contour plot to set starting point
+  const handlePlotClick = useCallback((cx: number, cy: number) => {
+    setX0(cx);
+    setY0(cy);
   }, []);
 
   const handleRun = useCallback(async () => {
@@ -266,6 +332,9 @@ export default function Home() {
               gradientField={gradientField}
               title={surfaceInfoMap[surface]?.name ?? surface}
               viewMode={viewMode}
+              onPointClick={handlePlotClick}
+              startX={x0}
+              startY={y0}
             />
           </div>
 
