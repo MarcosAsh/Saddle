@@ -22,13 +22,24 @@ double himmelblau(double x, double y);
 double bowl(double x, double y);
 
 /*
+ * Monkey saddle: f(x,y) = x^3 - 3*x*y^2 + 0.5*(x^2 + y^2)
+ * The pure monkey saddle x^3 - 3xy^2 has a degenerate saddle at the origin
+ * (all second derivatives zero). Adding a small bowl term lifts it into
+ * something optimisers can actually work with while preserving the saddle
+ * point character. The gradient at the origin is still zero, but the
+ * Hessian is [1, 0; 0, 1], so first-order methods stall while second-order
+ * methods can detect the nearby negative curvature from the cubic term.
+ */
+double monkey_saddle(double x, double y);
+
+/*
  * Grid evaluation: evaluates a surface over an evenly spaced grid.
  *
  * out     - pre-allocated buffer of size rows * cols (row-major)
  * x_min, x_max - x-axis bounds
  * y_min, y_max - y-axis bounds
  * rows, cols   - grid dimensions
- * surface_id   - 0=rosenbrock, 1=beale, 2=himmelblau, 3=bowl
+ * surface_id   - 0=rosenbrock, 1=beale, 2=himmelblau, 3=bowl, 4=monkey_saddle
  */
 void eval_grid(double *out,
                double x_min, double x_max,

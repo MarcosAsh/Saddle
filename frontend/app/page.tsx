@@ -8,17 +8,21 @@ import BenchmarkPanel from "@/components/BenchmarkPanel";
 import {
   fetchSurface,
   fetchOptimise,
+  fetchSurfaces,
+  fetchGradientField,
   type SurfaceName,
   type OptimiserName,
   type SurfaceResponse,
   type TrajectoryPoint,
+  type SurfaceInfo,
+  type GradientFieldResponse,
 } from "@/lib/api";
 
 const OPTIMISER_COLORS: Record<OptimiserName, string> = {
-  sgd: "#e11d48",
-  adam: "#2563eb",
-  adahessian: "#7c3aed",
-  c_adam: "#059669",
+  sgd: "#f38ba8",
+  adam: "#89b4fa",
+  adahessian: "#cba6f7",
+  c_adam: "#a6e3a1",
 };
 
 const OPTIMISER_LABELS: Record<OptimiserName, string> = {
@@ -47,7 +51,11 @@ export default function Home() {
   const [sideBySide, setSideBySide] = useState(true);
   const [animSpeed, setAnimSpeed] = useState(5);
 
+  const [showGradients, setShowGradients] = useState(false);
+
   const [surfaceData, setSurfaceData] = useState<SurfaceResponse | null>(null);
+  const [gradientField, setGradientField] = useState<GradientFieldResponse | null>(null);
+  const [surfaceInfoMap, setSurfaceInfoMap] = useState<Record<string, SurfaceInfo>>({});
   const [trajectories, setTrajectories] = useState<TrajectoryState[]>([]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,10 +96,22 @@ export default function Home() {
     };
   });
 
+  // Load surface info on mount
+  useEffect(() => {
+    fetchSurfaces()
+      .then((infos) => {
+        const map: Record<string, SurfaceInfo> = {};
+        for (const info of infos) map[info.key] = info;
+        setSurfaceInfoMap(map);
+      })
+      .catch(() => {});
+  }, []);
+
   // Load surface when selection changes
   useEffect(() => {
     let cancelled = false;
     setSurfaceData(null);
+    setGradientField(null);
     fetchSurface(surface, 150)
       .then((data) => {
         if (!cancelled) setSurfaceData(data);
@@ -103,6 +123,23 @@ export default function Home() {
       cancelled = true;
     };
   }, [surface]);
+
+  // Load gradient field when toggled on
+  useEffect(() => {
+    if (!showGradients) {
+      setGradientField(null);
+      return;
+    }
+    let cancelled = false;
+    fetchGradientField(surface, 20)
+      .then((data) => {
+        if (!cancelled) setGradientField(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [surface, showGradients]);
 
   useEffect(() => {
     return () => {
@@ -167,15 +204,15 @@ export default function Home() {
 
   return (
     <main className="min-h-screen p-6 md:p-10 max-w-7xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-black">Saddle</h1>
-        <p className="text-sm text-neutral-400 mt-1">
+      <div className="mb-8 flex items-center gap-4">
+        <img src="/logo.svg" alt="Saddle" className="h-[4.2rem]" />
+        <p className="text-sm text-ctp-subtext0">
           Interactive optimiser visualisation
         </p>
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+        <div className="mb-4 p-3 bg-ctp-surface0 border border-ctp-red/30 rounded text-ctp-red text-sm">
           {error}
         </div>
       )}
@@ -206,27 +243,31 @@ export default function Home() {
             running={running}
             animSpeed={animSpeed}
             setAnimSpeed={setAnimSpeed}
+            showGradients={showGradients}
+            setShowGradients={setShowGradients}
+            surfaceDescription={surfaceInfoMap[surface]?.description ?? null}
+            surfaceFormula={surfaceInfoMap[surface]?.formula ?? null}
           />
-          <div className="mt-4">
-            <BenchmarkPanel />
-          </div>
         </div>
 
         {/* Plots */}
         <div className="flex-1 flex flex-col gap-4">
-          <div className="border border-neutral-200 rounded-lg h-[500px] lg:h-[600px]">
+          <div className="border border-ctp-surface1 rounded-lg h-[500px] lg:h-[600px]">
             <SurfacePlot
               surface={surfaceData}
               trajectories={trajectories}
-              title={`${surface.charAt(0).toUpperCase() + surface.slice(1)} surface`}
+              gradientField={gradientField}
+              title={surfaceInfoMap[surface]?.name ?? surface}
             />
           </div>
 
           {trajectories.length > 0 && (
-            <div className="border border-neutral-200 rounded-lg h-[250px]">
+            <div className="border border-ctp-surface1 rounded-lg h-[250px]">
               <ConvergencePlot trajectories={trajectories} />
             </div>
           )}
+
+          <BenchmarkPanel />
         </div>
       </div>
     </main>

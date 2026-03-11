@@ -65,6 +65,27 @@ double bowl(double x, double y) {
 }
 
 /*
+ * Monkey saddle with a regularising bowl term.
+ *
+ * The pure monkey saddle f(x,y) = x^3 - 3xy^2 has a degenerate
+ * critical point at the origin where the Hessian is identically zero.
+ * That makes it uninteresting for optimisation since there's no
+ * curvature signal at all.
+ *
+ * Adding 0.5*(x^2 + y^2) creates a surface that still has a saddle-like
+ * character near the origin (three valleys radiating outward at 120 degrees)
+ * but with a nonzero Hessian. The gradient is still zero at the origin,
+ * so it's a genuine critical point. First-order methods stall because
+ * the gradient vanishes. Second-order methods can detect that the cubic
+ * term creates directions of negative curvature just off-center.
+ *
+ * f(x, y) = x^3 - 3*x*y^2 + 0.5*(x^2 + y^2)
+ */
+double monkey_saddle(double x, double y) {
+    return x * x * x - 3.0 * x * y * y + 0.5 * (x * x + y * y);
+}
+
+/*
  * Evaluate a loss surface over a uniform grid.
  *
  * The grid spans [x_min, x_max] x [y_min, y_max] with the given
@@ -76,6 +97,7 @@ double bowl(double x, double y) {
  *   1 = beale
  *   2 = himmelblau
  *   3 = bowl
+ *   4 = monkey_saddle
  */
 void eval_grid(double *out,
                double x_min, double x_max,
@@ -86,11 +108,12 @@ void eval_grid(double *out,
     /* Pick the surface function pointer once, then loop. */
     double (*surface)(double, double);
     switch (surface_id) {
-        case 0: surface = rosenbrock; break;
-        case 1: surface = beale;      break;
-        case 2: surface = himmelblau; break;
-        case 3: surface = bowl;       break;
-        default: surface = bowl;      break;
+        case 0: surface = rosenbrock;    break;
+        case 1: surface = beale;         break;
+        case 2: surface = himmelblau;    break;
+        case 3: surface = bowl;          break;
+        case 4: surface = monkey_saddle; break;
+        default: surface = bowl;         break;
     }
 
     /* Step sizes for the grid. Handle the degenerate case of 1 row/col. */

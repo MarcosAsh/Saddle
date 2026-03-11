@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import PlotlyChart from "./PlotlyChart";
-import type { SurfaceResponse, TrajectoryPoint } from "@/lib/api";
+import type { SurfaceResponse, TrajectoryPoint, GradientFieldResponse } from "@/lib/api";
 
 interface SurfacePlotProps {
   surface: SurfaceResponse | null;
@@ -12,12 +12,14 @@ interface SurfacePlotProps {
     color: string;
     animIndex: number;
   }[];
+  gradientField: GradientFieldResponse | null;
   title?: string;
 }
 
 export default function SurfacePlot({
   surface,
   trajectories,
+  gradientField,
   title,
 }: SurfacePlotProps) {
   const { xs, ys, zLog, zMin, zMax } = useMemo(() => {
@@ -74,6 +76,70 @@ export default function SurfacePlot({
       } as Plotly.Data);
     }
 
+    // Gradient field as 3D cone plot
+    if (gradientField && surface) {
+      const gf = gradientField;
+      const px: number[] = [];
+      const py: number[] = [];
+      const pz: number[] = [];
+      const ux: number[] = [];
+      const uy: number[] = [];
+      const uz: number[] = [];
+
+      for (let i = 0; i < gf.y.length; i++) {
+        for (let j = 0; j < gf.x.length; j++) {
+          const gxi = gf.gx[i][j];
+          const gyi = gf.gy[i][j];
+          const mag = Math.sqrt(gxi * gxi + gyi * gyi);
+          if (mag < 1e-10) continue;
+
+          px.push(gf.x[j]);
+          py.push(gf.y[i]);
+          // Place arrows just above the surface
+          const sv = surface.values;
+          // Find nearest grid point for z
+          const ci = Math.round(
+            ((gf.y[i] - surface.y_min) / (surface.y_max - surface.y_min)) *
+              (sv.length - 1)
+          );
+          const cj = Math.round(
+            ((gf.x[j] - surface.x_min) / (surface.x_max - surface.x_min)) *
+              (sv[0].length - 1)
+          );
+          const zVal =
+            ci >= 0 && ci < sv.length && cj >= 0 && cj < sv[0].length
+              ? Math.log10(Math.max(sv[ci][cj], 1e-10))
+              : 0;
+          pz.push(zVal + 0.15);
+
+          // Negative gradient (descent direction), normalized
+          ux.push(-gxi / mag);
+          uy.push(-gyi / mag);
+          uz.push(0);
+        }
+      }
+
+      if (px.length > 0) {
+        d.push({
+          type: "cone",
+          x: px,
+          y: py,
+          z: pz,
+          u: ux,
+          v: uy,
+          w: uz,
+          sizemode: "absolute",
+          sizeref: 0.06,
+          anchor: "tail",
+          showscale: false,
+          colorscale: [[0, "#ef4444"], [1, "#ef4444"]],
+          opacity: 0.4,
+          name: "Gradient",
+          hoverinfo: "skip",
+        } as Plotly.Data);
+      }
+    }
+
     for (const traj of trajectories) {
       const visible = traj.points.slice(0, traj.animIndex + 1);
       if (visible.length === 0) continue;
@@ -123,7 +189,7 @@ export default function SurfacePlot({
     }
 
     return d;
-  }, [surface, xs, ys, zLog, trajectories]);
+  }, [surface, xs, ys, zLog, trajectories, gradientField]);
 
   return (
     <PlotlyChart
@@ -133,15 +199,15 @@ export default function SurfacePlot({
           ? {
               text: title,
               font: {
-                color: "#000",
+                color: "#cdd6f4",
                 size: 14,
                 family: "var(--font-geist-sans), sans-serif",
               },
             }
           : undefined,
-        paper_bgcolor: "white",
+        paper_bgcolor: "#1e1e2e",
         font: {
-          color: "#525252",
+          color: "#a6adc8",
           family: "var(--font-geist-sans), sans-serif",
         },
         uirevision: "stable",
@@ -149,26 +215,26 @@ export default function SurfacePlot({
           xaxis: {
             title: { text: "x", font: { size: 11 } },
             range: surface ? [surface.x_min, surface.x_max] : undefined,
-            gridcolor: "#e5e5e5",
-            backgroundcolor: "white",
+            gridcolor: "#45475a",
+            backgroundcolor: "#181825",
             showbackground: true,
-            tickfont: { color: "#737373", size: 10 },
+            tickfont: { color: "#9399b2", size: 10 },
           },
           yaxis: {
             title: { text: "y", font: { size: 11 } },
             range: surface ? [surface.y_min, surface.y_max] : undefined,
-            gridcolor: "#e5e5e5",
-            backgroundcolor: "white",
+            gridcolor: "#45475a",
+            backgroundcolor: "#181825",
             showbackground: true,
-            tickfont: { color: "#737373", size: 10 },
+            tickfont: { color: "#9399b2", size: 10 },
           },
           zaxis: {
             title: { text: "log\u2081\u2080(loss)", font: { size: 11 } },
             range: [zMin, zMax + 0.5],
-            gridcolor: "#e5e5e5",
-            backgroundcolor: "#fafafa",
+            gridcolor: "#45475a",
+            backgroundcolor: "#181825",
             showbackground: true,
-            tickfont: { color: "#737373", size: 10 },
+            tickfont: { color: "#9399b2", size: 10 },
           },
           camera: {
             eye: { x: 1.5, y: 1.5, z: 1.0 },
@@ -179,10 +245,10 @@ export default function SurfacePlot({
         legend: {
           x: 0,
           y: 1,
-          bgcolor: "rgba(255,255,255,0.9)",
-          bordercolor: "#e5e5e5",
+          bgcolor: "rgba(24,24,37,0.9)",
+          bordercolor: "#45475a",
           borderwidth: 1,
-          font: { color: "#000" },
+          font: { color: "#cdd6f4" },
         },
         margin: { l: 0, r: 0, t: 40, b: 0 },
         autosize: true,

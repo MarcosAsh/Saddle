@@ -81,11 +81,12 @@ void adam_optimise(double x0, double y0,
     /* Select surface function. */
     double (*surface)(double, double);
     switch (surface_id) {
-        case 0: surface = rosenbrock; break;
-        case 1: surface = beale;      break;
-        case 2: surface = himmelblau; break;
-        case 3: surface = bowl;       break;
-        default: surface = bowl;      break;
+        case 0: surface = rosenbrock;    break;
+        case 1: surface = beale;         break;
+        case 2: surface = himmelblau;    break;
+        case 3: surface = bowl;          break;
+        case 4: surface = monkey_saddle; break;
+        default: surface = bowl;         break;
     }
 
     /* Working state: params and Adam moments. */

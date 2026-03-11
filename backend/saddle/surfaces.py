@@ -21,7 +21,7 @@ _LIB_PATH = Path(__file__).resolve().parent.parent / "csrc" / "libsaddle.so"
 _lib = ctypes.CDLL(str(_LIB_PATH))
 
 # Scalar evaluators: double f(double x, double y)
-for _name in ("rosenbrock", "beale", "himmelblau", "bowl"):
+for _name in ("rosenbrock", "beale", "himmelblau", "bowl", "monkey_saddle"):
     _fn = getattr(_lib, _name)
     _fn.argtypes = [ctypes.c_double, ctypes.c_double]
     _fn.restype = ctypes.c_double
@@ -43,13 +43,14 @@ _lib.eval_grid.restype = None
 # Surface name -> id mapping
 # ---------------------------------------------------------------------------
 
-SurfaceName = Literal["rosenbrock", "beale", "himmelblau", "bowl"]
+SurfaceName = Literal["rosenbrock", "beale", "himmelblau", "bowl", "monkey_saddle"]
 
 SURFACE_IDS: dict[SurfaceName, int] = {
     "rosenbrock": 0,
     "beale": 1,
     "himmelblau": 2,
     "bowl": 3,
+    "monkey_saddle": 4,
 }
 
 # ---------------------------------------------------------------------------
@@ -122,11 +123,16 @@ def np_bowl(x: NDArray | float, y: NDArray | float) -> NDArray | float:
     return x * x + y * y
 
 
+def np_monkey_saddle(x: NDArray | float, y: NDArray | float) -> NDArray | float:
+    return x * x * x - 3.0 * x * y * y + 0.5 * (x * x + y * y)
+
+
 NP_SURFACES = {
     "rosenbrock": np_rosenbrock,
     "beale": np_beale,
     "himmelblau": np_himmelblau,
     "bowl": np_bowl,
+    "monkey_saddle": np_monkey_saddle,
 }
 
 

@@ -7,6 +7,7 @@ const SURFACES: { value: SurfaceName; label: string }[] = [
   { value: "beale", label: "Beale" },
   { value: "himmelblau", label: "Himmelblau" },
   { value: "bowl", label: "Bowl" },
+  { value: "monkey_saddle", label: "Monkey Saddle" },
 ];
 
 const OPTIMISERS: { value: OptimiserName; label: string }[] = [
@@ -39,6 +40,10 @@ interface ControlsProps {
   running: boolean;
   animSpeed: number;
   setAnimSpeed: (v: number) => void;
+  showGradients: boolean;
+  setShowGradients: (v: boolean) => void;
+  surfaceDescription: string | null;
+  surfaceFormula: string | null;
 }
 
 function Slider({
@@ -61,8 +66,8 @@ function Slider({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex justify-between text-xs">
-        <span className="text-neutral-500">{label}</span>
-        <span className="text-black font-mono">{display ?? value}</span>
+        <span className="text-ctp-subtext0">{label}</span>
+        <span className="text-ctp-text font-mono">{display ?? value}</span>
       </div>
       <input
         type="range"
@@ -71,7 +76,7 @@ function Slider({
         step={step}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-full accent-black"
+        className="w-full accent-ctp-mauve"
       />
     </div>
   );
@@ -79,17 +84,17 @@ function Slider({
 
 export default function Controls(props: ControlsProps) {
   return (
-    <div className="flex flex-col gap-4 p-4 border border-neutral-200 rounded-lg overflow-y-auto">
-      <h2 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+    <div className="flex flex-col gap-4 p-4 border border-ctp-surface1 rounded-lg overflow-y-auto bg-ctp-mantle">
+      <h2 className="text-xs font-semibold text-ctp-overlay1 uppercase tracking-wider">
         Controls
       </h2>
 
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-neutral-500">Surface</label>
+        <label className="text-xs text-ctp-subtext0">Surface</label>
         <select
           value={props.surface}
           onChange={(e) => props.setSurface(e.target.value as SurfaceName)}
-          className="bg-white text-black text-sm rounded px-2 py-1.5 border border-neutral-200 focus:border-black outline-none"
+          className="bg-ctp-surface0 text-ctp-text text-sm rounded px-2 py-1.5 border border-ctp-surface1 focus:border-ctp-mauve outline-none"
         >
           {SURFACES.map((s) => (
             <option key={s.value} value={s.value}>
@@ -100,11 +105,11 @@ export default function Controls(props: ControlsProps) {
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-neutral-500">Optimiser</label>
+        <label className="text-xs text-ctp-subtext0">Optimiser</label>
         <select
           value={props.optimiser1}
           onChange={(e) => props.setOptimiser1(e.target.value as OptimiserName)}
-          className="bg-white text-black text-sm rounded px-2 py-1.5 border border-neutral-200 focus:border-black outline-none"
+          className="bg-ctp-surface0 text-ctp-text text-sm rounded px-2 py-1.5 border border-ctp-surface1 focus:border-ctp-mauve outline-none"
         >
           {OPTIMISERS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -114,25 +119,45 @@ export default function Controls(props: ControlsProps) {
         </select>
       </div>
 
-      <label className="flex items-center gap-2 text-xs text-neutral-500 cursor-pointer">
+      {/* Surface description */}
+      {props.surfaceDescription && (
+        <div className="text-xs text-ctp-overlay1 leading-relaxed">
+          {props.surfaceFormula && (
+            <p className="font-mono text-ctp-subtext0 mb-1">{props.surfaceFormula}</p>
+          )}
+          <p>{props.surfaceDescription}</p>
+        </div>
+      )}
+
+      <label className="flex items-center gap-2 text-xs text-ctp-subtext0 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={props.showGradients}
+          onChange={(e) => props.setShowGradients(e.target.checked)}
+          className="accent-ctp-mauve"
+        />
+        Show gradient field
+      </label>
+
+      <label className="flex items-center gap-2 text-xs text-ctp-subtext0 cursor-pointer">
         <input
           type="checkbox"
           checked={props.sideBySide}
           onChange={(e) => props.setSideBySide(e.target.checked)}
-          className="accent-black"
+          className="accent-ctp-mauve"
         />
         Compare two optimisers
       </label>
 
       {props.sideBySide && (
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-neutral-500">Optimiser 2</label>
+          <label className="text-xs text-ctp-subtext0">Optimiser 2</label>
           <select
             value={props.optimiser2 ?? "adam"}
             onChange={(e) =>
               props.setOptimiser2(e.target.value as OptimiserName)
             }
-            className="bg-white text-black text-sm rounded px-2 py-1.5 border border-neutral-200 focus:border-black outline-none"
+            className="bg-ctp-surface0 text-ctp-text text-sm rounded px-2 py-1.5 border border-ctp-surface1 focus:border-ctp-mauve outline-none"
           >
             {OPTIMISERS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -143,7 +168,7 @@ export default function Controls(props: ControlsProps) {
         </div>
       )}
 
-      <hr className="border-neutral-200" />
+      <hr className="border-ctp-surface1" />
 
       <Slider
         label="Learning rate"
@@ -174,7 +199,7 @@ export default function Controls(props: ControlsProps) {
         onChange={props.setNumSteps}
       />
 
-      <hr className="border-neutral-200" />
+      <hr className="border-ctp-surface1" />
 
       <Slider
         label="x&#x2080;"
@@ -196,7 +221,7 @@ export default function Controls(props: ControlsProps) {
         display={props.y0.toFixed(1)}
       />
 
-      <hr className="border-neutral-200" />
+      <hr className="border-ctp-surface1" />
 
       <Slider
         label="Animation speed"
@@ -211,7 +236,7 @@ export default function Controls(props: ControlsProps) {
       <button
         onClick={props.onRun}
         disabled={props.running}
-        className="mt-2 bg-black hover:bg-neutral-800 disabled:bg-neutral-300 disabled:text-neutral-500 text-white text-sm font-medium py-2 px-4 rounded transition-colors"
+        className="mt-2 bg-ctp-mauve hover:bg-ctp-lavender disabled:bg-ctp-surface1 disabled:text-ctp-overlay0 text-ctp-crust text-sm font-medium py-2 px-4 rounded transition-colors"
       >
         {props.running ? "Running..." : "Run"}
       </button>

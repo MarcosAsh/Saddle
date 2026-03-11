@@ -1,6 +1,6 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-export type SurfaceName = "rosenbrock" | "beale" | "himmelblau" | "bowl";
+export type SurfaceName = "rosenbrock" | "beale" | "himmelblau" | "bowl" | "monkey_saddle";
 export type OptimiserName = "sgd" | "adam" | "adahessian" | "c_adam";
 
 export interface TrajectoryPoint {
@@ -39,6 +39,21 @@ export interface SurfaceResponse {
   values: number[][];
 }
 
+export interface SurfaceInfo {
+  key: string;
+  name: string;
+  formula: string;
+  description: string;
+  minima: string;
+}
+
+export interface GradientFieldResponse {
+  x: number[];
+  y: number[];
+  gx: number[][];
+  gy: number[][];
+}
+
 export interface BenchmarkResponse {
   c_total_ms: number;
   c_per_step_us: number;
@@ -69,6 +84,23 @@ export async function fetchOptimise(
     body: JSON.stringify(req),
   });
   if (!res.ok) throw new Error(`Optimise failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchSurfaces(): Promise<SurfaceInfo[]> {
+  const res = await fetch(`${API_BASE}/surfaces`);
+  if (!res.ok) throw new Error(`Surfaces list failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchGradientField(
+  name: SurfaceName,
+  resolution: number = 20
+): Promise<GradientFieldResponse> {
+  const res = await fetch(
+    `${API_BASE}/gradient?name=${name}&resolution=${resolution}`
+  );
+  if (!res.ok) throw new Error(`Gradient field failed: ${res.status}`);
   return res.json();
 }
 

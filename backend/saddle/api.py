@@ -2,9 +2,11 @@
 FastAPI application for Saddle.
 
 Endpoints:
-  POST /optimise  -- run an optimiser on a loss surface, return trajectory
-  GET  /surface   -- evaluate a loss surface on a grid for contour rendering
-  GET  /benchmark -- run the C vs JAX Adam benchmark
+  POST /optimise    -- run an optimiser on a loss surface, return trajectory
+  GET  /surface     -- evaluate a loss surface on a grid for contour rendering
+  GET  /surfaces    -- list available surfaces with metadata
+  GET  /gradient    -- compute gradient field over a grid
+  GET  /benchmark   -- run the C vs JAX Adam benchmark
 """
 
 from __future__ import annotations
@@ -13,11 +15,12 @@ from typing import Literal
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from saddle.benchmark import BenchmarkResult, benchmark_adam
+from saddle.benchmark import benchmark_adam
 from saddle.c_adam import c_adam_optimise
 from saddle.optimisers import (
     AdamState,
@@ -69,11 +72,61 @@ def _jax_bowl(params: jax.Array) -> jax.Array:
     return jnp.sum(params ** 2)
 
 
+def _jax_monkey_saddle(params: jax.Array) -> jax.Array:
+    x, y = params[0], params[1]
+    return x ** 3 - 3.0 * x * y ** 2 + 0.5 * (x ** 2 + y ** 2)
+
+
 JAX_SURFACES = {
     "rosenbrock": _jax_rosenbrock,
     "beale": _jax_beale,
     "himmelblau": _jax_himmelblau,
     "bowl": _jax_bowl,
+    "monkey_saddle": _jax_monkey_saddle,
+}
+
+
+# ---------------------------------------------------------------------------
+# Surface metadata
+# ---------------------------------------------------------------------------
+
+SURFACE_INFO: dict[str, dict] = {
+    "rosenbrock": {
+        "name": "Rosenbrock",
+        "formula": "f(x,y) = (1-x)^2 + 100(y-x^2)^2",
+        "description": "Banana-shaped valley. The minimum sits inside a long, narrow, "
+                       "parabolic valley that most methods find quickly but crawl along.",
+        "minima": "(1, 1)",
+    },
+    "beale": {
+        "name": "Beale",
+        "formula": "f(x,y) = (1.5-x+xy)^2 + (2.25-x+xy^2)^2 + (2.625-x+xy^3)^2",
+        "description": "Sharp ridges and flat regions. Fixed step sizes overshoot the ridges, "
+                       "adaptive methods navigate them.",
+        "minima": "(3, 0.5)",
+    },
+    "himmelblau": {
+        "name": "Himmelblau",
+        "formula": "f(x,y) = (x^2+y-11)^2 + (x+y^2-7)^2",
+        "description": "Four identical minima. Different starting points converge to different "
+                       "minima, making it useful for testing sensitivity to initial conditions.",
+        "minima": "(3,2), (-2.81,3.13), (-3.78,-3.28), (3.58,-1.85)",
+    },
+    "bowl": {
+        "name": "Bowl",
+        "formula": "f(x,y) = x^2 + y^2",
+        "description": "Perfectly conditioned quadratic. Every optimiser converges. "
+                       "Useful as a sanity check and baseline.",
+        "minima": "(0, 0)",
+    },
+    "monkey_saddle": {
+        "name": "Monkey Saddle",
+        "formula": "f(x,y) = x^3 - 3xy^2 + 0.5(x^2+y^2)",
+        "description": "Three valleys radiating from the origin at 120 degrees. The gradient "
+                       "vanishes at the origin but it is not a minimum. First-order methods "
+                       "stall, second-order methods detect the nearby negative curvature and escape.",
+        "minima": "None (saddle point at origin)",
+    },
 }
 
 
@@ -120,6 +173,21 @@ class SurfaceResponse(BaseModel):
     values: list[list[float]]
 
 
+class SurfaceInfoResponse(BaseModel):
+    name: str
+    key: str
+    formula: str
+    description: str
+    minima: str
+
+
+class GradientFieldResponse(BaseModel):
+    x: list[float]
+    y: list[float]
+    gx: list[list[float]]
+    gy: list[list[float]]
+
+
 class BenchmarkResponse(BaseModel):
     c_total_ms: float
     c_per_step_us: float
@@ -139,12 +207,37 @@ SURFACE_BOUNDS: dict[SurfaceName, tuple[float, float, float, float]] = {
     "beale": (-4.5, 4.5, -4.5, 4.5),
     "himmelblau": (-5.0, 5.0, -5.0, 5.0),
     "bowl": (-5.0, 5.0, -5.0, 5.0),
+    "monkey_saddle": (-2.0, 2.0, -2.0, 2.0),
+}
+
+# Default starting points that make sense per surface
+SURFACE_DEFAULTS: dict[SurfaceName, tuple[float, float]] = {
+    "rosenbrock": (-1.0, 1.0),
+    "beale": (-1.0, -1.0),
+    "himmelblau": (-4.0, 4.0),
+    "bowl": (3.0, 4.0),
+    "monkey_saddle": (0.1, 0.1),
 }
 
 
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+@app.get("/surfaces", response_model=list[SurfaceInfoResponse])
+def list_surfaces() -> list[SurfaceInfoResponse]:
+    """List all available surfaces with metadata."""
+    return [
+        SurfaceInfoResponse(
+            key=key,
+            name=info["name"],
+            formula=info["formula"],
+            description=info["description"],
+            minima=info["minima"],
+        )
+        for key, info in SURFACE_INFO.items()
+    ]
+
 
 @app.post("/optimise", response_model=OptimiseResponse)
 def optimise(req: OptimiseRequest) -> OptimiseResponse:
@@ -204,13 +297,14 @@ def optimise(req: OptimiseRequest) -> OptimiseResponse:
     elif req.optimiser == "adahessian":
         state = AdaHessianState.init(params)
         key = jax.random.key(0)
+        adahessian_eps = max(req.eps, 1e-4)
         for _ in range(req.num_steps):
             grads = grad_fn(params)
             key, subkey = jax.random.split(key)
             state, params = adahessian_update(
                 state, params, grads, loss_fn, subkey,
                 lr=req.lr, beta1=req.beta1, beta2=req.beta2,
-                eps=req.eps, hessian_power=req.hessian_power,
+                eps=adahessian_eps, hessian_power=req.hessian_power,
             )
             trajectory.append(TrajectoryPoint(
                 x=float(params[0]), y=float(params[1]), loss=float(loss_fn(params)),
@@ -246,6 +340,48 @@ def surface(
         rows=resolution, cols=resolution,
         values=grid.tolist(),
     )
+
+
+@app.get("/gradient", response_model=GradientFieldResponse)
+def gradient_field(
+    name: SurfaceName = "rosenbrock",
+    resolution: int = 20,
+) -> GradientFieldResponse:
+    """
+    Compute the gradient vector field over a grid.
+
+    Returns gx[i][j] and gy[i][j], the partial derivatives at each grid point.
+    Used for rendering gradient arrows on the surface plot.
+    """
+    if resolution < 2 or resolution > 100:
+        raise HTTPException(400, "Resolution must be between 2 and 100")
+
+    loss_fn = JAX_SURFACES.get(name)
+    if loss_fn is None:
+        raise HTTPException(400, f"Unknown surface: {name}")
+
+    bounds = SURFACE_BOUNDS[name]
+    x_min, x_max, y_min, y_max = bounds
+
+    xs = np.linspace(x_min, x_max, resolution).tolist()
+    ys = np.linspace(y_min, y_max, resolution).tolist()
+
+    grad_fn = jax.grad(loss_fn)
+
+    gx_grid: list[list[float]] = []
+    gy_grid: list[list[float]] = []
+
+    for yi in ys:
+        gx_row: list[float] = []
+        gy_row: list[float] = []
+        for xi in xs:
+            g = grad_fn(jnp.array([xi, yi]))
+            gx_row.append(float(g[0]))
+            gy_row.append(float(g[1]))
+        gx_grid.append(gx_row)
+        gy_grid.append(gy_row)
+
+    return GradientFieldResponse(x=xs, y=ys, gx=gx_grid, gy=gy_grid)
 
 
 @app.get("/benchmark", response_model=BenchmarkResponse)
