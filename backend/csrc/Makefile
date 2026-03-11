@@ -21,7 +21,7 @@ $(TARGET): $(OBJ)
 
 wasm: surfaces.c adam.c wasm_api.c surfaces.h adam.h
 	$(EMCC) -O2 -s WASM=1 \
-	    -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap","getValue","setValue"]' \
+	    -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap","getValue","setValue","HEAPF64"]' \
 	    -s EXPORTED_FUNCTIONS='["_malloc","_free"]' \
 	    -s ALLOW_MEMORY_GROWTH=1 \
 	    -s MODULARIZE=1 \
