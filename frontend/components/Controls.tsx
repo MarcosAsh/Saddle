@@ -58,6 +58,7 @@ function Slider({
   step,
   onChange,
   display,
+  hint,
 }: {
   label: string;
   value: number;
@@ -66,6 +67,7 @@ function Slider({
   step: number;
   onChange: (v: number) => void;
   display?: string;
+  hint?: string;
 }) {
   return (
     <div className="flex flex-col gap-1">
@@ -73,6 +75,7 @@ function Slider({
         <span className="text-ctp-subtext0">{label}</span>
         <span className="text-ctp-text font-mono">{display ?? value}</span>
       </div>
+      {hint && <p className="text-[10px] text-ctp-overlay0 leading-tight">{hint}</p>}
       <input
         type="range"
         min={min}
@@ -192,6 +195,7 @@ export default function Controls(props: ControlsProps) {
         step={0.1}
         onChange={(v) => props.setLr(Math.pow(10, v))}
         display={props.lr.toExponential(1)}
+        hint="Step size per update. Too high overshoots, too low crawls."
       />
 
       <Slider
@@ -202,6 +206,7 @@ export default function Controls(props: ControlsProps) {
         step={0.01}
         onChange={props.setMomentum}
         display={props.momentum.toFixed(2)}
+        hint="SGD velocity decay. Higher values carry more speed through valleys."
       />
 
       <Slider
@@ -211,6 +216,7 @@ export default function Controls(props: ControlsProps) {
         max={5000}
         step={50}
         onChange={props.setNumSteps}
+        hint="Total optimisation iterations to run."
       />
 
       <hr className="border-ctp-surface1" />
@@ -223,6 +229,7 @@ export default function Controls(props: ControlsProps) {
         step={0.1}
         onChange={props.setX0}
         display={props.x0.toFixed(1)}
+        hint="Starting x coordinate on the surface."
       />
 
       <Slider
@@ -233,6 +240,7 @@ export default function Controls(props: ControlsProps) {
         step={0.1}
         onChange={props.setY0}
         display={props.y0.toFixed(1)}
+        hint="Starting y coordinate on the surface."
       />
 
       <hr className="border-ctp-surface1" />
@@ -245,6 +253,7 @@ export default function Controls(props: ControlsProps) {
         step={1}
         onChange={props.setAnimSpeed}
         display={`${props.animSpeed} steps/frame`}
+        hint="How many steps to advance per animation frame."
       />
 
       <button

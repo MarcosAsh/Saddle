@@ -53,10 +53,22 @@ let cachedModule: EmscriptenModule | null = null;
 async function loadModule(): Promise<EmscriptenModule> {
   if (cachedModule) return cachedModule;
 
-  // Dynamically load the Emscripten glue JS from public/
-  // @ts-expect-error -- loaded as a static asset, no module declaration
-  const factory = (await import(/* webpackIgnore: true */ "/wasm/saddle.js")).default;
-  const mod: EmscriptenModule = await factory();
+  // Load the Emscripten glue script into the global scope.
+  // MODULARIZE=1 sets globalThis.SaddleModule as a factory function.
+  if (!(globalThis as Record<string, unknown>).SaddleModule) {
+    await new Promise<void>((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "/wasm/saddle.js";
+      script.onload = () => resolve();
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+
+  const factory = (globalThis as Record<string, unknown>).SaddleModule as (
+    opts?: Record<string, unknown>
+  ) => Promise<EmscriptenModule>;
+  const mod = await factory();
   cachedModule = mod;
   return mod;
 }
