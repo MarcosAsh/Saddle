@@ -148,7 +148,7 @@ OptimiserName = Literal["sgd", "adam", "adahessian", "c_adam", "rmsprop", "lbfgs
 
 
 class OptimiseRequest(BaseModel):
-    surface: SurfaceName
+    surface: SurfaceName | Literal["custom"]
     optimiser: OptimiserName
     x0: float = Field(default=-1.0, description="Starting x coordinate")
     y0: float = Field(default=1.0, description="Starting y coordinate")
