@@ -26,7 +26,7 @@ image = (
 )
 
 
-@app.function(image=image, keep_warm=1)
+@app.function(image=image, min_containers=1)
 @modal.concurrent(max_inputs=100)
 @modal.asgi_app()
 def web():
