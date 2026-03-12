@@ -181,7 +181,7 @@ export default function Home() {
       if (surface === "nn_landscape") {
         setSurfaceData(null);
         setGradientField(null);
-        fetchNNLandscape(50, nnSeed)
+        fetchNNLandscape(30, nnSeed)
           .then(setSurfaceData)
           .catch((e) => setError(e.message));
       }
@@ -290,7 +290,7 @@ export default function Home() {
       // NN landscape mode: fetch pre-computed trajectory
       if (surface === "nn_landscape") {
         const [landscapeData, trajData] = await Promise.all([
-          fetchNNLandscape(50, nnSeed),
+          fetchNNLandscape(30, nnSeed),
           fetchNNTrajectory(nnSeed),
         ]);
         setSurfaceData(landscapeData);

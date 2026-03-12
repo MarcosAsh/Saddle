@@ -144,7 +144,7 @@ export async function fetchCustomSurface(
 }
 
 export async function fetchNNLandscape(
-  resolution: number = 50,
+  resolution: number = 30,
   seed: number = 42
 ): Promise<SurfaceResponse> {
   const res = await fetch(

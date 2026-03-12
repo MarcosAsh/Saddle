@@ -516,7 +516,7 @@ def custom_surface(
 
 @app.get("/nn-landscape", response_model=SurfaceResponse)
 def nn_landscape(
-    resolution: int = 50,
+    resolution: int = 30,
     seed: int = 42,
 ) -> SurfaceResponse:
     """Return a neural net loss landscape projected onto two random directions."""

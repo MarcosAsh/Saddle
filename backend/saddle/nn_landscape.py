@@ -156,14 +156,16 @@ def compute_nn_landscape(resolution: int = 50, seed: int = 42) -> dict:
     alphas = jnp.linspace(-alpha_range, alpha_range, resolution)
     betas = jnp.linspace(-alpha_range, alpha_range, resolution)
 
-    values = []
-    for beta in betas:
-        row = []
-        for alpha in alphas:
-            theta = flat_star + float(alpha) * d1 + float(beta) * d2
-            loss = float(_loss_fn(unravel(theta), X, y))
-            row.append(loss)
-        values.append(row)
+    aa, bb = jnp.meshgrid(alphas, betas)
+    aa_flat = aa.ravel()
+    bb_flat = bb.ravel()
+
+    def _eval_point(alpha: jnp.ndarray, beta: jnp.ndarray) -> jnp.ndarray:
+        theta = flat_star + alpha * d1 + beta * d2
+        return _loss_fn(unravel(theta), X, y)
+
+    losses = jax.vmap(_eval_point)(aa_flat, bb_flat)
+    values = losses.reshape(resolution, resolution).tolist()
 
     return {
         "x_min": -alpha_range,
