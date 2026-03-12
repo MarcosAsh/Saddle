@@ -11,6 +11,8 @@ __pycache__/
 # C build artifacts
 *.o
 *.so
+backend/csrc/saddle.js
+backend/csrc/saddle.wasm
 
 # Frontend
 frontend/node_modules/
