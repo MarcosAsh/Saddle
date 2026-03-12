@@ -10,8 +10,12 @@ import {
   fetchOptimise,
   fetchSurfaces,
   fetchGradientField,
+  fetchCustomSurface,
+  fetchNNLandscape,
+  fetchNNTrajectory,
   type SurfaceName,
   type OptimiserName,
+  type ScheduleName,
   type SurfaceResponse,
   type TrajectoryPoint,
   type SurfaceInfo,
@@ -20,8 +24,9 @@ import {
 
 // --- URL hash helpers ---
 
-const VALID_SURFACES = new Set<string>(["rosenbrock", "beale", "himmelblau", "bowl", "monkey_saddle"]);
+const VALID_SURFACES = new Set<string>(["rosenbrock", "beale", "himmelblau", "bowl", "monkey_saddle", "custom", "nn_landscape"]);
 const VALID_OPTIMISERS = new Set<string>(["sgd", "adam", "adahessian", "c_adam", "rmsprop", "lbfgs"]);
+const VALID_SCHEDULES = new Set<string>(["constant", "cosine", "warmup_cosine", "step_decay"]);
 
 function parseHash(): Record<string, string> {
   if (typeof window === "undefined") return {};
@@ -36,6 +41,7 @@ function parseHash(): Record<string, string> {
 
 function writeHash(state: Record<string, string | number | boolean>) {
   const parts = Object.entries(state)
+    .filter(([, v]) => v !== "" && v !== undefined && v !== null)
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
     .join("&");
   window.history.replaceState(null, "", `#${parts}`);
@@ -83,6 +89,12 @@ export default function Home() {
       view: h.v === "2d" ? "contour" as const : "3d" as const,
       grad: h.gf === "1",
       speed: h.sp ? Number(h.sp) : 5,
+      schedule: VALID_SCHEDULES.has(h.sch ?? "") ? (h.sch as ScheduleName) : "constant",
+      warmupSteps: h.ws ? Number(h.ws) : 50,
+      batchSize: h.bs ? Number(h.bs) : null,
+      noiseEnabled: h.ne === "1",
+      customExpr: h.expr ?? "sin(x)*cos(y)",
+      nnSeed: h.nns ? Number(h.nns) : 42,
     };
   });
 
@@ -100,12 +112,20 @@ export default function Home() {
   const [showGradients, setShowGradients] = useState(initFromHash.grad);
   const [viewMode, setViewMode] = useState<"3d" | "contour">(initFromHash.view);
 
+  const [schedule, setSchedule] = useState<ScheduleName>(initFromHash.schedule);
+  const [warmupSteps, setWarmupSteps] = useState(initFromHash.warmupSteps);
+  const [batchSize, setBatchSize] = useState<number | null>(initFromHash.batchSize);
+  const [noiseEnabled, setNoiseEnabled] = useState(initFromHash.noiseEnabled);
+  const [customExpr, setCustomExpr] = useState(initFromHash.customExpr);
+  const [nnSeed, setNnSeed] = useState(initFromHash.nnSeed);
+
   const [surfaceData, setSurfaceData] = useState<SurfaceResponse | null>(null);
   const [gradientField, setGradientField] = useState<GradientFieldResponse | null>(null);
   const [surfaceInfoMap, setSurfaceInfoMap] = useState<Record<string, SurfaceInfo>>({});
   const [trajectories, setTrajectories] = useState<TrajectoryState[]>([]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingRun, setPendingRun] = useState(false);
 
   const animFrameRef = useRef<number | null>(null);
   const trajRef = useRef<TrajectoryState[]>([]);
@@ -156,6 +176,19 @@ export default function Home() {
 
   // Load surface when selection changes
   useEffect(() => {
+    if (surface === "nn_landscape" || surface === "custom") {
+      // These are loaded differently
+      if (surface === "nn_landscape") {
+        setSurfaceData(null);
+        setGradientField(null);
+        fetchNNLandscape(50, nnSeed)
+          .then(setSurfaceData)
+          .catch((e) => setError(e.message));
+      }
+      // Custom surface loads on run / expression change
+      return;
+    }
+
     let cancelled = false;
     setSurfaceData(null);
     setGradientField(null);
@@ -169,11 +202,28 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [surface]);
+  }, [surface, nnSeed]);
+
+  // Load custom surface when expression changes (debounced on blur/enter handled in Controls)
+  useEffect(() => {
+    if (surface !== "custom" || !customExpr.trim()) return;
+    let cancelled = false;
+    setSurfaceData(null);
+    fetchCustomSurface(customExpr, 150)
+      .then((data) => {
+        if (!cancelled) setSurfaceData(data);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e.message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [surface, customExpr]);
 
   // Load gradient field when toggled on
   useEffect(() => {
-    if (!showGradients) {
+    if (!showGradients || surface === "custom" || surface === "nn_landscape") {
       setGradientField(null);
       return;
     }
@@ -196,7 +246,7 @@ export default function Home() {
 
   // Sync state to URL hash
   useEffect(() => {
-    writeHash({
+    const hashState: Record<string, string | number | boolean> = {
       s: surface,
       o1: optimiser1,
       o2: sideBySide && optimiser2 ? optimiser2 : "none",
@@ -209,8 +259,17 @@ export default function Home() {
       v: viewMode === "contour" ? "2d" : "3d",
       gf: showGradients ? "1" : "0",
       sp: animSpeed,
-    });
-  }, [surface, optimiser1, optimiser2, lr, momentum, numSteps, x0, y0, sideBySide, viewMode, showGradients, animSpeed]);
+      sch: schedule,
+    };
+    if (schedule === "warmup_cosine") hashState.ws = warmupSteps;
+    if (noiseEnabled && batchSize !== null) {
+      hashState.ne = "1";
+      hashState.bs = batchSize;
+    }
+    if (surface === "custom" && customExpr) hashState.expr = customExpr;
+    if (surface === "nn_landscape") hashState.nns = nnSeed;
+    writeHash(hashState);
+  }, [surface, optimiser1, optimiser2, lr, momentum, numSteps, x0, y0, sideBySide, viewMode, showGradients, animSpeed, schedule, warmupSteps, batchSize, noiseEnabled, customExpr, nnSeed]);
 
   // Click on contour plot to set starting point
   const handlePlotClick = useCallback((cx: number, cy: number) => {
@@ -228,6 +287,27 @@ export default function Home() {
     setTrajectories([]);
 
     try {
+      // NN landscape mode: fetch pre-computed trajectory
+      if (surface === "nn_landscape") {
+        const [landscapeData, trajData] = await Promise.all([
+          fetchNNLandscape(50, nnSeed),
+          fetchNNTrajectory(nnSeed),
+        ]);
+        setSurfaceData(landscapeData);
+
+        const newTrajs: TrajectoryState[] = [{
+          points: trajData.trajectory,
+          name: "Adam (training)",
+          color: OPTIMISER_COLORS.adam,
+          animIndex: 0,
+        }];
+
+        trajRef.current = newTrajs;
+        setTrajectories(newTrajs);
+        animFrameRef.current = requestAnimationFrame(() => animateFnRef.current());
+        return;
+      }
+
       const optimisers: OptimiserName[] =
         sideBySide && optimiser2
           ? [optimiser1, optimiser2]
@@ -243,6 +323,10 @@ export default function Home() {
             num_steps: numSteps,
             lr,
             momentum,
+            schedule,
+            warmup_steps: schedule === "warmup_cosine" ? warmupSteps : undefined,
+            batch_size: noiseEnabled ? batchSize ?? undefined : undefined,
+            custom_expr: surface === "custom" ? customExpr : undefined,
           })
         )
       );
@@ -271,7 +355,21 @@ export default function Home() {
     x0,
     y0,
     sideBySide,
+    schedule,
+    warmupSteps,
+    batchSize,
+    noiseEnabled,
+    customExpr,
+    nnSeed,
   ]);
+
+  // Trigger run after preset state flushes
+  useEffect(() => {
+    if (pendingRun) {
+      setPendingRun(false);
+      handleRun();
+    }
+  }, [pendingRun, handleRun]);
 
   return (
     <main className="min-h-screen p-4 md:p-6 lg:p-10 max-w-7xl mx-auto">
@@ -279,6 +377,15 @@ export default function Home() {
         <img src="/logo.svg" alt="Saddle" className="h-10 lg:h-[4.2rem]" />
         <p className="text-xs lg:text-sm text-ctp-subtext0">
           Interactive optimiser visualisation
+          {" "}
+          <a
+            href="https://github.com/MarcosAsh/Saddle"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-ctp-blue hover:text-ctp-lavender transition-colors"
+          >
+            (GitHub)
+          </a>
         </p>
       </div>
 
@@ -320,6 +427,19 @@ export default function Home() {
             surfaceFormula={surfaceInfoMap[surface]?.formula ?? null}
             viewMode={viewMode}
             setViewMode={setViewMode}
+            schedule={schedule}
+            setSchedule={setSchedule}
+            warmupSteps={warmupSteps}
+            setWarmupSteps={setWarmupSteps}
+            batchSize={batchSize}
+            setBatchSize={setBatchSize}
+            noiseEnabled={noiseEnabled}
+            setNoiseEnabled={setNoiseEnabled}
+            customExpr={customExpr}
+            setCustomExpr={setCustomExpr}
+            onAutoRun={() => setPendingRun(true)}
+            nnSeed={nnSeed}
+            setNnSeed={setNnSeed}
           />
         </div>
 
@@ -330,7 +450,7 @@ export default function Home() {
               surface={surfaceData}
               trajectories={trajectories}
               gradientField={gradientField}
-              title={surfaceInfoMap[surface]?.name ?? surface}
+              title={surface === "custom" ? "Custom" : surface === "nn_landscape" ? "Neural Net Landscape" : surfaceInfoMap[surface]?.name ?? surface}
               viewMode={viewMode}
               onPointClick={handlePlotClick}
               startX={x0}

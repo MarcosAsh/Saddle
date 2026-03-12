@@ -6,14 +6,20 @@ Interactive optimiser visualisation. Compare how SGD, Adam, L-BFGS, and more
 navigate loss surfaces in real time -- with a C backend for fast numerical
 baselines, JAX for autodiff, and WASM for in-browser benchmarks.
 
-![screenshot](https://github.com/user-attachments/assets/placeholder)
+![screenshot](screenshot-2026-03-11_20-25-34.png)
 
 ## What it does
 
 Pick a loss surface, drop two optimisers on it, and watch them race.
 Toggle between a 3D surface plot and a 2D contour view. A convergence chart
-tracks loss over steps, and a benchmark panel times C vs JAX (server-side)
-and WASM vs JS (client-side) Adam head-to-head.
+tracks loss over steps (with an LR sparkline when using schedules), and a
+benchmark panel times C vs JAX (server-side) and WASM vs JS (client-side)
+Adam head-to-head.
+
+Other things you can do: apply LR schedules (cosine, warmup cosine, step
+decay), inject stochastic gradient noise, type a custom surface expression,
+visualise a neural net loss landscape, or click preset buttons to load
+interesting scenarios.
 
 ### Surfaces
 
@@ -40,11 +46,14 @@ and WASM vs JS (client-side) Adam head-to-head.
 backend/
   csrc/           C loss surfaces + Adam (compiled to libsaddle.so and saddle.wasm)
   saddle/
-    optimisers.py JAX implementations of SGD, Adam, AdaHessian, RMSprop, L-BFGS
-    api.py        FastAPI server (5 endpoints)
-    surfaces.py   ctypes bindings to C library
-    c_adam.py     ctypes wrapper for C Adam
-    benchmark.py  C vs JAX timing harness
+    optimisers.py    JAX implementations of SGD, Adam, AdaHessian, RMSprop, L-BFGS
+    api.py           FastAPI server (8 endpoints)
+    surfaces.py      ctypes bindings to C library
+    c_adam.py        ctypes wrapper for C Adam
+    benchmark.py     C vs JAX timing harness
+    schedules.py     LR schedule functions (constant, cosine, warmup_cosine, step_decay)
+    custom_surface.py AST-safe expression evaluator + JAX fn builder
+    nn_landscape.py  MLP on spirals, loss landscape projection (Li et al. 2018)
 
 frontend/         Next.js + Plotly.js + Tailwind (Catppuccin Mocha)
   lib/wasm.ts     WASM loader for client-side benchmarks
@@ -94,6 +103,9 @@ make install-wasm             # builds and copies to frontend/public/wasm/
 | GET | `/surfaces` | List surfaces with metadata |
 | GET | `/gradient` | Gradient vector field |
 | GET | `/benchmark` | C vs JAX Adam timing |
+| GET | `/custom-surface` | Evaluate a user-defined expression on a grid |
+| GET | `/nn-landscape` | Neural net loss landscape projection |
+| GET | `/nn-trajectory` | Neural net training trajectory projection |
 
 ## Tech
 

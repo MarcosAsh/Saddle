@@ -1,12 +1,14 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-export type SurfaceName = "rosenbrock" | "beale" | "himmelblau" | "bowl" | "monkey_saddle";
+export type SurfaceName = "rosenbrock" | "beale" | "himmelblau" | "bowl" | "monkey_saddle" | "custom" | "nn_landscape";
 export type OptimiserName = "sgd" | "adam" | "adahessian" | "c_adam" | "rmsprop" | "lbfgs";
+export type ScheduleName = "constant" | "cosine" | "warmup_cosine" | "step_decay";
 
 export interface TrajectoryPoint {
   x: number;
   y: number;
   loss: number;
+  lr?: number;
 }
 
 export interface OptimiseRequest {
@@ -23,6 +25,10 @@ export interface OptimiseRequest {
   hessian_power?: number;
   alpha?: number;
   lbfgs_m?: number;
+  schedule?: ScheduleName;
+  warmup_steps?: number;
+  batch_size?: number;
+  custom_expr?: string;
 }
 
 export interface OptimiseResponse {
@@ -114,5 +120,44 @@ export async function fetchBenchmark(
     `${API_BASE}/benchmark?num_steps=${numSteps}&param_dim=${paramDim}`
   );
   if (!res.ok) throw new Error(`Benchmark failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchCustomSurface(
+  expr: string,
+  resolution: number = 150,
+  bounds?: { x_min: number; x_max: number; y_min: number; y_max: number }
+): Promise<SurfaceResponse> {
+  const params = new URLSearchParams({
+    expr,
+    resolution: String(resolution),
+  });
+  if (bounds) {
+    params.set("x_min", String(bounds.x_min));
+    params.set("x_max", String(bounds.x_max));
+    params.set("y_min", String(bounds.y_min));
+    params.set("y_max", String(bounds.y_max));
+  }
+  const res = await fetch(`${API_BASE}/custom-surface?${params}`);
+  if (!res.ok) throw new Error(`Custom surface failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchNNLandscape(
+  resolution: number = 50,
+  seed: number = 42
+): Promise<SurfaceResponse> {
+  const res = await fetch(
+    `${API_BASE}/nn-landscape?resolution=${resolution}&seed=${seed}`
+  );
+  if (!res.ok) throw new Error(`NN landscape failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchNNTrajectory(
+  seed: number = 42
+): Promise<OptimiseResponse> {
+  const res = await fetch(`${API_BASE}/nn-trajectory?seed=${seed}`);
+  if (!res.ok) throw new Error(`NN trajectory failed: ${res.status}`);
   return res.json();
 }
